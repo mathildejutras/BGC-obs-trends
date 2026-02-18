@@ -1,7 +1,7 @@
 # BGC-obs-trends
 Scripts to calculate ocean biogeochemical trends based on oceanic observations
 
-This repository contains scripts that were used to produce the results presented in manuscript Jutras et al., (in prep), some required data, and processed results.
+This repository contains scripts that were used to produce the results presented in manuscript Jutras et al., (in prep), some required data, and processed results. Running these scripts requires a Python installation with the packages listed below. 
 
 List of scripts:
 
@@ -27,3 +27,23 @@ List of result files:
 
 * **nitrate_trends_per_region.nc** : This file contains the time series of nitrate anomalies on a 2.5 x 2.5 degree grid and for groups of density layers.
 
+# System requirements
+These scripts are in Python. 
+## Python Dependencies
+Python >= 3.9.23
+
+Packages:
+
+    - numpy=1.26.4
+    - pandas=2.3.1
+    - xarray=2023.6.0
+    - scipy=1.13.1
+    - dask=2024.5.0
+    - statsmodels=0.14.5
+    - pygamman
+    - joblib=1.4.2
+    - seawater=3.3.5
+    - scikit-learn=1.6.1
+
+# License
+MIT License
