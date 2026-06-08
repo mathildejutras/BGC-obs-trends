@@ -305,6 +305,10 @@ if get_data:
                                         'G2phtsinsitutp':'PH_IN_SITU_TOTAL_ADJUSTED','G2sigma0':'sigma0', 'G2gamma':'gamma',
                                         'G2depth':'Depth'})
 
+            # add instrument uncertainties
+            gdap['DOXY_ADJUSTED_ERROR'] = gdap['DOXY_ADJUSTED']*0.01  # uncertainty is expressed in percentage
+            gdap['NITRATE_ADJUSTED_ERROR'] = gdap['NITRATE_ADJUSTED']*0.02
+
             print('GLODAP KEYS:', list(gdap.keys()))
 
     # Prepare Argo
@@ -375,6 +379,10 @@ if get_data:
                                     'temps':'TEMP_ADJUSTED','sals':'PSAL_ADJUSTED',
                                     'oxys':'DOXY_ADJUSTED','nitrates':'NITRATE_ADJUSTED', 'phosphates':'PHOSPHATE_ADJUSTED',
                                     'phs':'PH_IN_SITU_TOTAL_ADJUSTED', 'depths':'Depth', 'datetimes':'datetime'})
+        # instrument uncertainties
+        df_wod['DOXY_ADJUSTED_ERROR'] = df_wod['DOXY_ADJUSTED']*0.01
+        df_wod['NITRATE_ADJUSTED_ERROR'] = df_wod['NITRATE_ADJUSTED']*0.02        
+
         print('WOD KEYS:', list(df_wod.keys()))
 
     # ------
@@ -470,33 +478,49 @@ def compute_bin(lonbin, latbin):
                         # 2) minimum of X years of data coverage to calculate a trend
                         if (max(timel) - min(timel) > 15) & period_condition_met :
 
+                            has_error = ('DOXY' in var) or ('NITRATE' in var) 
+
                             # Store GLODAP & WOD data
                             glodap = data_sig[data_sig['DATASET'] == 'GLODAP']
                             datal_glodap = glodap[var].values
                             timel_glodap = glodap.datetime.values
                             timel_glodap = timel_glodap[~np.isnan(datal_glodap)]
+                            if has_error:
+                                errorl_glodap = data_sig[data_sig['DATASET'] == 'GLODAP'][var+'_ERROR'].values[~np.isnan(datal_glodap)]
                             datal_glodap = datal_glodap[~np.isnan(datal_glodap)]
                             wod = data_sig[data_sig['DATASET'] == 'WOD']
                             datal_wod = wod[var].values
                             timel_wod = wod.datetime.values
                             timel_wod = timel_wod[~np.isnan(datal_wod)]
+                            if has_error:
+                                errorl_wod = data_sig[data_sig['DATASET'] == 'WOD'][var+'_ERROR'].values[~np.isnan(datal_wod)]
                             datal_wod = datal_wod[~np.isnan(datal_wod)]
 
                             # Identify Argo data
                             argo = data_sig[data_sig['DATASET'] == 'Argo']
-                            argo = argo[argo[var].notna()] # filter out nans
+                            if has_error:
+                                argo = argo[argo[[var, var+'_ERROR']].notna()]
+                            else:
+                                argo = argo[argo[var].notna()]
 
                             # Group per month
                             datetime_time = pd.to_datetime((argo.datetime - 1970) * 365.25, origin=f'{1970}-01-01', unit='D')
                             argo.loc[:,'period'] = datetime_time.dt.to_period('M')
-                            df_mean = argo.groupby('period')[var].mean().reset_index()
+                            if has_error:
+                                df_mean = argo.groupby('period')[[var, var+'_ERROR']].mean().reset_index()
+                            else:
+                                df_mean = argo.groupby('period')[var].mean().reset_index()
                             timel_argo = [each.year+(each.month-1+0.5)/12 for each in df_mean.period.values]
 
                             datal_argo = df_mean[var].values
+                            if has_error:
+                                errorl_argo = df_mean[var+'_ERROR'].values
 
                             # Combine
                             timel = np.array( list(timel_glodap)+list(timel_wod)+list(timel_argo) )
                             datal = np.array( list(datal_glodap)+list(datal_wod)+list(datal_argo) )
+                            if has_error:
+                                errorl = np.array( list(errorl_glodap)+list(errorl_wod)+list(errorl_argo) )
 
                             # remove outliers
                             if var != 'PRES_ADJUSTED':
@@ -504,7 +528,13 @@ def compute_bin(lonbin, latbin):
                                 datal[datal < -3000] = np.nan
 
                             # calculate trend
-                            fittype, coefs, coefs2, slope_error, [x_line, y_line_low, y_line_high] = fit_trend(timel, datal, plot_local=False, verbose=False)
+                            # weights
+                            if ('DOXY' in var) or ('NITRATE' in var):
+                                w = 1./errorl
+                            else:
+                                w = np.ones(len(datal))
+
+                            fittype, coefs, coefs2, slope_error, [x_line, y_line_low, y_line_high] = fit_trend_w(timel, datal, w, plot_local=False, verbose=False)
                             if fittype == None:
                                 signi = 0
                             elif fittype == 'Poly':
@@ -673,3 +703,8 @@ if plot_trends:
 
         plt.savefig('PATH_TO_FIGS/trends_on_grid_%s%s_%s.png'%(dataset_name,period,var), dpi=300)
         plt.clf()
+                            # weights
+                            if ('DOXY' in var) or ('NITRATE' in var):
+                                w = 1./errorl
+                            else:
+                                w = np.ones(len(datal))
